@@ -17,6 +17,7 @@ VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "mi_token_verificacion_123
 # Facebook Marketing API
 MKT_TOKEN = os.environ.get("MKT_TOKEN", "")
 AD_ACCOUNT_ID = os.environ.get("AD_ACCOUNT_ID", "")
+PAGE_ID = os.environ.get("PAGE_ID", "142158129158183")
 
 DB_HOST = os.environ.get("DB_HOST")
 DB_NAME = os.environ.get("DB_NAME")
@@ -126,7 +127,7 @@ def verify_signature(req) -> bool:
 
 def fetch_lead(lead_id: str) -> dict:
     """Obtiene el lead completo desde Graph API."""
-    url = f"https://graph.facebook.com/v20.0/{lead_id}"
+    url = f"https://graph.facebook.com/v23.0/{lead_id}"
     params = {
         "access_token": PAGE_TOKEN,
         "fields": "id,created_time,field_data,ad_id,adset_id,campaign_id,form_id,platform"
