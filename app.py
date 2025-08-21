@@ -21,16 +21,18 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD")
 DB_PORT = int(os.environ.get("DB_PORT", 3306))
 
 LEADS_FOLDER = "Leads_expokossodo"
+SAVE_TO_FILE = os.environ.get("SAVE_TO_FILE", "false").lower() == "true"  # Desactivado por defecto
 
 app = Flask(__name__)
 
 def init_app():
     """Inicializa la aplicación creando carpetas necesarias"""
-    if not os.path.exists(LEADS_FOLDER):
-        os.makedirs(LEADS_FOLDER)
-        app.logger.info(f"Carpeta '{LEADS_FOLDER}' creada exitosamente")
-    else:
-        app.logger.info(f"Carpeta '{LEADS_FOLDER}' ya existe")
+    if SAVE_TO_FILE:
+        if not os.path.exists(LEADS_FOLDER):
+            os.makedirs(LEADS_FOLDER)
+            app.logger.info(f"Carpeta '{LEADS_FOLDER}' creada exitosamente")
+        else:
+            app.logger.info(f"Carpeta '{LEADS_FOLDER}' ya existe")
 
 def verify_signature(req) -> bool:
     """Valida X-Hub-Signature-256 con el APP_SECRET."""
@@ -68,6 +70,9 @@ def parse_common_fields(lead_json: dict):
 
 def save_lead_to_file(lead_json: dict, leadgen_id: str):
     """Guarda el lead en un archivo JSON en la carpeta Leads_expokossodo"""
+    if not SAVE_TO_FILE:
+        return  # No guardar en archivo si está desactivado
+        
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{LEADS_FOLDER}/lead_{leadgen_id}_{timestamp}.json"
     
