@@ -29,14 +29,89 @@ SAVE_TO_FILE = os.environ.get("SAVE_TO_FILE", "false").lower() == "true"  # Desa
 
 app = Flask(__name__)
 
+def verify_and_create_columns():
+    """Verifica que todas las columnas necesarias existan en la tabla fb_leads"""
+    if not all([DB_HOST, DB_NAME, DB_USER, DB_PASSWORD]):
+        app.logger.warning("MySQL no configurado completamente. Saltando verificación de columnas.")
+        return
+
+    try:
+        conn = pymysql.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            database=DB_NAME,
+            autocommit=True,
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+        
+        with conn.cursor() as cur:
+            # Verificar si la tabla existe
+            cur.execute("SHOW TABLES LIKE 'fb_leads'")
+            if not cur.fetchone():
+                app.logger.info("Tabla fb_leads no existe. Se creará al recibir el primer lead.")
+                conn.close()
+                return
+            
+            # Obtener columnas existentes
+            cur.execute("SHOW COLUMNS FROM fb_leads")
+            existing_columns = {row['Field'] for row in cur.fetchall()}
+            
+            # Columnas requeridas
+            required_columns = {
+                'campaign_name': 'VARCHAR(255) NULL',
+                'adset_name': 'VARCHAR(255) NULL', 
+                'ad_name': 'VARCHAR(255) NULL'
+            }
+            
+            # Verificar y agregar columnas faltantes
+            for column_name, column_definition in required_columns.items():
+                if column_name not in existing_columns:
+                    try:
+                        alter_sql = f"ALTER TABLE fb_leads ADD COLUMN {column_name} {column_definition}"
+                        cur.execute(alter_sql)
+                        app.logger.info(f"Columna '{column_name}' agregada exitosamente")
+                    except Exception as e:
+                        app.logger.error(f"Error agregando columna '{column_name}': {e}")
+                else:
+                    app.logger.info(f"Columna '{column_name}' ya existe")
+            
+            # Crear índices si no existen
+            indexes = {
+                'idx_campaign_name': 'campaign_name',
+                'idx_adset_name': 'adset_name',
+                'idx_ad_name': 'ad_name'
+            }
+            
+            for index_name, column_name in indexes.items():
+                if column_name in existing_columns or column_name in required_columns:
+                    try:
+                        cur.execute(f"CREATE INDEX {index_name} ON fb_leads({column_name})")
+                        app.logger.info(f"Índice '{index_name}' creado exitosamente")
+                    except Exception as e:
+                        if "Duplicate key name" not in str(e):
+                            app.logger.warning(f"Info sobre índice '{index_name}': {e}")
+        
+        conn.close()
+        app.logger.info("Verificación de columnas completada")
+        
+    except Exception as e:
+        app.logger.exception(f"Error verificando columnas de base de datos: {e}")
+
 def init_app():
-    """Inicializa la aplicación creando carpetas necesarias"""
+    """Inicializa la aplicación creando carpetas necesarias y verificando BD"""
+    # Crear carpeta para archivos si está habilitado
     if SAVE_TO_FILE:
         if not os.path.exists(LEADS_FOLDER):
             os.makedirs(LEADS_FOLDER)
             app.logger.info(f"Carpeta '{LEADS_FOLDER}' creada exitosamente")
         else:
             app.logger.info(f"Carpeta '{LEADS_FOLDER}' ya existe")
+    
+    # Verificar y crear columnas faltantes en la base de datos
+    verify_and_create_columns()
 
 def verify_signature(req) -> bool:
     """Valida X-Hub-Signature-256 con el APP_SECRET."""
