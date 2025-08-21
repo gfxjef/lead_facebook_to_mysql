@@ -63,7 +63,8 @@ def verify_and_create_columns():
             required_columns = {
                 'campaign_name': 'VARCHAR(255) NULL',
                 'adset_name': 'VARCHAR(255) NULL', 
-                'ad_name': 'VARCHAR(255) NULL'
+                'ad_name': 'VARCHAR(255) NULL',
+                'sala': 'VARCHAR(10) NULL'
             }
             
             # Verificar y agregar columnas faltantes
@@ -82,7 +83,8 @@ def verify_and_create_columns():
             indexes = {
                 'idx_campaign_name': 'campaign_name',
                 'idx_adset_name': 'adset_name',
-                'idx_ad_name': 'ad_name'
+                'idx_ad_name': 'ad_name',
+                'idx_sala': 'sala'
             }
             
             for index_name, column_name in indexes.items():
@@ -204,6 +206,31 @@ def get_ad_name(ad_id: str) -> str:
         app.logger.warning(f"Error obteniendo nombre de anuncio {ad_id}: {e}")
         return None
 
+def extract_sala_and_clean_name(ad_name: str) -> tuple:
+    """
+    Extrae la sala del nombre del anuncio y limpia el nombre.
+    
+    Ejemplos:
+    'S3 - De la Microscopía Óptica...' -> ('S3', 'De la Microscopía Óptica...')
+    'S1 - Determinación de Vida...' -> ('S1', 'Determinación de Vida...')
+    'Nombre sin sala' -> (None, 'Nombre sin sala')
+    """
+    if not ad_name:
+        return None, ad_name
+    
+    # Patrón para detectar sala: S1, S2, S3, S4, etc. seguido de " - "
+    import re
+    pattern = r'^(S\d+)\s*-\s*(.+)$'
+    match = re.match(pattern, ad_name.strip())
+    
+    if match:
+        sala = match.group(1)  # Ej: "S3"
+        clean_name = match.group(2).strip()  # Resto del nombre
+        return sala, clean_name
+    else:
+        # No se encontró patrón de sala
+        return None, ad_name
+
 def save_lead_to_file(lead_json: dict, leadgen_id: str):
     """Guarda el lead en un archivo JSON en la carpeta Leads_expokossodo"""
     if not SAVE_TO_FILE:
@@ -230,7 +257,10 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
     # Obtener nombres desde Facebook Marketing API
     campaign_name = get_campaign_name(lead_json.get("campaign_id"))
     adset_name = get_adset_name(lead_json.get("adset_id"))
-    ad_name = get_ad_name(lead_json.get("ad_id"))
+    ad_name_raw = get_ad_name(lead_json.get("ad_id"))
+    
+    # Extraer sala y limpiar nombre del anuncio
+    sala, ad_name = extract_sala_and_clean_name(ad_name_raw)
 
     try:
         conn = pymysql.connect(
@@ -256,6 +286,7 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                   campaign_name VARCHAR(255) NULL,
                   adset_name VARCHAR(255) NULL,
                   ad_name VARCHAR(255) NULL,
+                  sala VARCHAR(10) NULL,
                   full_name VARCHAR(255) NULL,
                   email VARCHAR(255) NULL,
                   phone VARCHAR(64) NULL,
@@ -267,9 +298,9 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
             
             sql = """
             INSERT INTO fb_leads (id, form_id, page_id, campaign_id, adset_id, ad_id,
-                                  campaign_name, adset_name, ad_name,
+                                  campaign_name, adset_name, ad_name, sala,
                                   full_name, email, phone, created_time, raw_json)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE
               campaign_id=VALUES(campaign_id),
               adset_id=VALUES(adset_id),
@@ -277,6 +308,7 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
               campaign_name=VALUES(campaign_name),
               adset_name=VALUES(adset_name),
               ad_name=VALUES(ad_name),
+              sala=VALUES(sala),
               full_name=VALUES(full_name),
               email=VALUES(email),
               phone=VALUES(phone),
@@ -292,6 +324,7 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                 campaign_name,
                 adset_name,
                 ad_name,
+                sala,
                 full_name,
                 email,
                 phone,
