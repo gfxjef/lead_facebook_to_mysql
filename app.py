@@ -14,6 +14,10 @@ FB_APP_SECRET = os.environ.get("FB_APP_SECRET", "").encode()
 PAGE_TOKEN = os.environ.get("FB_PAGE_ACCESS_TOKEN", "")
 VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "mi_token_verificacion_123")
 
+# Facebook Marketing API
+MKT_TOKEN = os.environ.get("MKT_TOKEN", "")
+AD_ACCOUNT_ID = os.environ.get("AD_ACCOUNT_ID", "")
+
 DB_HOST = os.environ.get("DB_HOST")
 DB_NAME = os.environ.get("DB_NAME")
 DB_USER = os.environ.get("DB_USER")
@@ -68,6 +72,63 @@ def parse_common_fields(lead_json: dict):
     phone = field_map.get("phone_number") or field_map.get("phone")
     return full_name, email, phone
 
+def get_campaign_name(campaign_id: str) -> str:
+    """Obtiene el nombre de la campaña desde Facebook Marketing API"""
+    if not campaign_id or not MKT_TOKEN:
+        return None
+    
+    try:
+        url = f"https://graph.facebook.com/v23.0/{campaign_id}"
+        params = {
+            "fields": "name",
+            "access_token": MKT_TOKEN
+        }
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("name")
+    except Exception as e:
+        app.logger.warning(f"Error obteniendo nombre de campaña {campaign_id}: {e}")
+        return None
+
+def get_adset_name(adset_id: str) -> str:
+    """Obtiene el nombre del adset desde Facebook Marketing API"""
+    if not adset_id or not MKT_TOKEN:
+        return None
+    
+    try:
+        url = f"https://graph.facebook.com/v23.0/{adset_id}"
+        params = {
+            "fields": "name",
+            "access_token": MKT_TOKEN
+        }
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("name")
+    except Exception as e:
+        app.logger.warning(f"Error obteniendo nombre de adset {adset_id}: {e}")
+        return None
+
+def get_ad_name(ad_id: str) -> str:
+    """Obtiene el nombre del anuncio desde Facebook Marketing API"""
+    if not ad_id or not MKT_TOKEN:
+        return None
+    
+    try:
+        url = f"https://graph.facebook.com/v23.0/{ad_id}"
+        params = {
+            "fields": "name",
+            "access_token": MKT_TOKEN
+        }
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("name")
+    except Exception as e:
+        app.logger.warning(f"Error obteniendo nombre de anuncio {ad_id}: {e}")
+        return None
+
 def save_lead_to_file(lead_json: dict, leadgen_id: str):
     """Guarda el lead en un archivo JSON en la carpeta Leads_expokossodo"""
     if not SAVE_TO_FILE:
@@ -90,6 +151,11 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
     full_name, email, phone = parse_common_fields(lead_json)
     created_time = datetime.fromisoformat(lead_json["created_time"].replace("Z", "+00:00")).astimezone(timezone.utc)
     payload = json.dumps(lead_json, ensure_ascii=False)
+    
+    # Obtener nombres desde Facebook Marketing API
+    campaign_name = get_campaign_name(lead_json.get("campaign_id"))
+    adset_name = get_adset_name(lead_json.get("adset_id"))
+    ad_name = get_ad_name(lead_json.get("ad_id"))
 
     try:
         conn = pymysql.connect(
@@ -112,6 +178,9 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                   campaign_id VARCHAR(64) NULL,
                   adset_id VARCHAR(64) NULL,
                   ad_id VARCHAR(64) NULL,
+                  campaign_name VARCHAR(255) NULL,
+                  adset_name VARCHAR(255) NULL,
+                  ad_name VARCHAR(255) NULL,
                   full_name VARCHAR(255) NULL,
                   email VARCHAR(255) NULL,
                   phone VARCHAR(64) NULL,
@@ -123,12 +192,16 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
             
             sql = """
             INSERT INTO fb_leads (id, form_id, page_id, campaign_id, adset_id, ad_id,
+                                  campaign_name, adset_name, ad_name,
                                   full_name, email, phone, created_time, raw_json)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE
               campaign_id=VALUES(campaign_id),
               adset_id=VALUES(adset_id),
               ad_id=VALUES(ad_id),
+              campaign_name=VALUES(campaign_name),
+              adset_name=VALUES(adset_name),
+              ad_name=VALUES(ad_name),
               full_name=VALUES(full_name),
               email=VALUES(email),
               phone=VALUES(phone),
@@ -141,6 +214,9 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                 lead_json.get("campaign_id"),
                 lead_json.get("adset_id"),
                 lead_json.get("ad_id"),
+                campaign_name,
+                adset_name,
+                ad_name,
                 full_name,
                 email,
                 phone,

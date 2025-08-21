@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS fb_leads (
   campaign_id VARCHAR(64) NULL,         -- ID de la campaña publicitaria
   adset_id VARCHAR(64) NULL,            -- ID del conjunto de anuncios
   ad_id VARCHAR(64) NULL,               -- ID del anuncio
+  campaign_name VARCHAR(255) NULL,      -- Nombre de la campaña publicitaria
+  adset_name VARCHAR(255) NULL,         -- Nombre del conjunto de anuncios
+  ad_name VARCHAR(255) NULL,            -- Nombre del anuncio
   full_name VARCHAR(255) NULL,          -- Nombre completo del lead
   email VARCHAR(255) NULL,              -- Email del lead
   phone VARCHAR(64) NULL,               -- Teléfono del lead
@@ -16,7 +19,14 @@ CREATE TABLE IF NOT EXISTS fb_leads (
   ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP  -- Fecha/hora de inserción en BD
 );
 
+-- Script para agregar columnas de nombres a tabla existente (ejecutar si ya existe la tabla)
+-- ALTER TABLE fb_leads ADD COLUMN campaign_name VARCHAR(255) NULL;
+-- ALTER TABLE fb_leads ADD COLUMN adset_name VARCHAR(255) NULL;
+-- ALTER TABLE fb_leads ADD COLUMN ad_name VARCHAR(255) NULL;
+
 -- Índices adicionales para búsquedas comunes
-CREATE INDEX idx_form_id ON fb_leads(form_id);
-CREATE INDEX idx_created_time ON fb_leads(created_time);
-CREATE INDEX idx_email ON fb_leads(email);
+CREATE INDEX IF NOT EXISTS idx_form_id ON fb_leads(form_id);
+CREATE INDEX IF NOT EXISTS idx_created_time ON fb_leads(created_time);
+CREATE INDEX IF NOT EXISTS idx_email ON fb_leads(email);
+CREATE INDEX IF NOT EXISTS idx_campaign_name ON fb_leads(campaign_name);
+CREATE INDEX IF NOT EXISTS idx_adset_name ON fb_leads(adset_name);
