@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, Response
 from dotenv import load_dotenv
 import requests
 import pymysql
+from modules.lead_consolidator import consolidate_lead_to_registros, ensure_procesado_column
 
 load_dotenv()
 
@@ -49,6 +50,8 @@ def verify_and_create_columns():
         )
         
         with conn.cursor() as cur:
+            # Verificar y crear columna 'procesado'
+            ensure_procesado_column(cur, conn)
             # Verificar si la tabla existe
             cur.execute("SHOW TABLES LIKE 'fb_leads'")
             if not cur.fetchone():
@@ -148,7 +151,10 @@ def parse_common_fields(lead_json: dict):
     full_name = field_map.get("full_name") or field_map.get("name")
     email = field_map.get("email")
     phone = field_map.get("phone_number") or field_map.get("phone")
-    return full_name, email, phone
+    job_title = field_map.get("job_title") or field_map.get("cargo")
+    company_name = field_map.get("company_name") or field_map.get("empresa")
+    
+    return full_name, email, phone, job_title, company_name
 
 def get_campaign_name(campaign_id: str) -> str:
     """Obtiene el nombre de la campaña desde Facebook Marketing API"""
@@ -246,12 +252,12 @@ def save_lead_to_file(lead_json: dict, leadgen_id: str):
     app.logger.info(f"Lead guardado en archivo: {filename}")
 
 def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
-    """Inserta lead en MySQL con idempotencia."""
+    """Inserta lead en MySQL con idempotencia y lo consolida en expokossodo_registros."""
     if not all([DB_HOST, DB_NAME, DB_USER, DB_PASSWORD]):
         app.logger.warning("MySQL no configurado completamente. Solo guardando en archivo.")
         return
 
-    full_name, email, phone = parse_common_fields(lead_json)
+    full_name, email, phone, job_title, company_name = parse_common_fields(lead_json)
     created_time = datetime.fromisoformat(lead_json["created_time"].replace("Z", "+00:00")).astimezone(timezone.utc)
     payload = json.dumps(lead_json, ensure_ascii=False)
     
@@ -293,6 +299,7 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                   phone VARCHAR(64) NULL,
                   created_time DATETIME NOT NULL,
                   raw_json JSON NOT NULL,
+                  procesado TINYINT(1) DEFAULT 0,
                   ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -332,10 +339,28 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                 created_time.strftime("%Y-%m-%d %H:%M:%S"),
                 payload
             ))
+            
+            # Preparar datos del lead para consolidación
+            lead_data = {
+                'id': int(lead_json["id"]),
+                'ad_name': ad_name,
+                'adset_name': adset_name,
+                'sala': sala,
+                'email': email,
+                'full_name': full_name,
+                'phone_number': phone,
+                'cargo': job_title,
+                'empresa': company_name
+            }
+            
+            # Consolidar el lead en expokossodo_registros
+            app.logger.info(f"Iniciando consolidación del lead {lead_json['id']} a expokossodo_registros...")
+            consolidate_lead_to_registros(lead_data, cur, conn)
+            
         conn.close()
-        app.logger.info(f"Lead {lead_json['id']} guardado en MySQL")
+        app.logger.info(f"Lead {lead_json['id']} guardado y consolidado exitosamente")
     except Exception as e:
-        app.logger.exception(f"Error guardando lead en MySQL: {e}")
+        app.logger.exception(f"Error guardando/consolidando lead en MySQL: {e}")
 
 @app.get("/facebook/webhook")
 def verify():
