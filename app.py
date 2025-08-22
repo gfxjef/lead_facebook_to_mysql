@@ -68,7 +68,8 @@ def verify_and_create_columns():
                 'campaign_name': 'VARCHAR(255) NULL',
                 'adset_name': 'VARCHAR(255) NULL', 
                 'ad_name': 'VARCHAR(255) NULL',
-                'sala': 'VARCHAR(10) NULL'
+                'sala': 'VARCHAR(10) NULL',
+                'enviado': 'TINYINT(1) DEFAULT 0'
             }
             
             # Verificar y agregar columnas faltantes
@@ -300,6 +301,7 @@ def save_lead_mysql(lead_json: dict, form_id: int, page_id: int):
                   created_time DATETIME NOT NULL,
                   raw_json JSON NOT NULL,
                   procesado TINYINT(1) DEFAULT 0,
+                  enviado TINYINT(1) DEFAULT 0,
                   ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)

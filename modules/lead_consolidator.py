@@ -98,13 +98,13 @@ def consolidate_lead_to_registros(lead_data, cursor, connection):
             connection.commit()
             print(f"[INSERT] Nuevo registro creado con ID {cursor.lastrowid} para {lead_data['email']}")
         
-        # 5. Marcar el lead como procesado
+        # 5. Marcar el lead como procesado y enviado
         cursor.execute(
-            "UPDATE fb_leads SET procesado = 1 WHERE id = %s",
+            "UPDATE fb_leads SET procesado = 1, enviado = 1 WHERE id = %s",
             (lead_data['id'],)
         )
         connection.commit()
-        print(f"[SUCCESS] Lead ID {lead_data['id']} marcado como procesado")
+        print(f"[SUCCESS] Lead ID {lead_data['id']} marcado como procesado y enviado")
         
         return True
         
@@ -115,9 +115,10 @@ def consolidate_lead_to_registros(lead_data, cursor, connection):
 
 def ensure_procesado_column(cursor, connection):
     """
-    Verifica y crea la columna 'procesado' en fb_leads si no existe.
+    Verifica y crea las columnas 'procesado' y 'enviado' en fb_leads si no existen.
     """
     try:
+        # Verificar columna 'procesado'
         cursor.execute("""
             SELECT COLUMN_NAME 
             FROM INFORMATION_SCHEMA.COLUMNS 
@@ -135,6 +136,25 @@ def ensure_procesado_column(cursor, connection):
             print("[SUCCESS] Columna 'procesado' agregada exitosamente")
         else:
             print("[INFO] Columna 'procesado' ya existe en fb_leads")
+        
+        # Verificar columna 'enviado'
+        cursor.execute("""
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = 'fb_leads' 
+            AND COLUMN_NAME = 'enviado'
+        """)
+        
+        if not cursor.fetchone():
+            print("[INFO] Agregando columna 'enviado' a tabla fb_leads...")
+            cursor.execute("""
+                ALTER TABLE fb_leads 
+                ADD COLUMN enviado TINYINT(1) DEFAULT 0
+            """)
+            connection.commit()
+            print("[SUCCESS] Columna 'enviado' agregada exitosamente")
+        else:
+            print("[INFO] Columna 'enviado' ya existe en fb_leads")
             
     except Exception as e:
-        print(f"[ERROR] Error verificando/creando columna procesado: {e}")
+        print(f"[ERROR] Error verificando/creando columnas: {e}")
