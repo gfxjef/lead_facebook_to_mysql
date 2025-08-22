@@ -50,14 +50,15 @@ def verify_and_create_columns():
         )
         
         with conn.cursor() as cur:
-            # Verificar y crear columna 'procesado'
-            ensure_procesado_column(cur, conn)
             # Verificar si la tabla existe
             cur.execute("SHOW TABLES LIKE 'fb_leads'")
             if not cur.fetchone():
                 app.logger.info("Tabla fb_leads no existe. Se creará al recibir el primer lead.")
                 conn.close()
                 return
+            
+            # Verificar y crear columnas 'procesado' y 'enviado'
+            ensure_procesado_column(cur, conn)
             
             # Obtener columnas existentes
             cur.execute("SHOW COLUMNS FROM fb_leads")
@@ -89,7 +90,8 @@ def verify_and_create_columns():
                 'idx_campaign_name': 'campaign_name',
                 'idx_adset_name': 'adset_name',
                 'idx_ad_name': 'ad_name',
-                'idx_sala': 'sala'
+                'idx_sala': 'sala',
+                'idx_enviado': 'enviado'
             }
             
             for index_name, column_name in indexes.items():
