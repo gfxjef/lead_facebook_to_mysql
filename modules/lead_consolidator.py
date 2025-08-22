@@ -3,6 +3,46 @@ from datetime import datetime
 from modules.events_matcher import find_event_id
 from modules.qr_generator import generate_qr_text
 
+def _create_registro_evento_relation(cursor, connection, registro_id, evento_id):
+    """
+    Crea la relación en expokossodo_registro_eventos y actualiza slots_ocupados.
+    Verifica duplicados antes de insertar.
+    """
+    try:
+        # 1. Verificar si la relación ya existe
+        cursor.execute("""
+            SELECT 1 FROM expokossodo_registro_eventos 
+            WHERE registro_id = %s AND evento_id = %s
+            LIMIT 1
+        """, (registro_id, evento_id))
+        
+        existe = cursor.fetchone()
+        if existe:
+            print(f"[INFO] Relación registro {registro_id} - evento {evento_id} ya existe")
+            return True
+        
+        # 2. Insertar la relación registro-evento
+        cursor.execute("""
+            INSERT INTO expokossodo_registro_eventos (registro_id, evento_id)
+            VALUES (%s, %s)
+        """, (registro_id, evento_id))
+        
+        # 3. Actualizar contador de slots ocupados en la tabla eventos
+        cursor.execute("""
+            UPDATE expokossodo_eventos 
+            SET slots_ocupados = slots_ocupados + 1 
+            WHERE id = %s
+        """, (evento_id,))
+        
+        connection.commit()
+        print(f"[RELATION] Creada relación registro {registro_id} - evento {evento_id} y actualizado slots")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Error creando relación registro-evento: {e}")
+        connection.rollback()
+        return False
+
 def consolidate_lead_to_registros(lead_data, cursor, connection):
     """
     Consolida un lead de Facebook a la tabla expokossodo_registros.
@@ -56,6 +96,9 @@ def consolidate_lead_to_registros(lead_data, cursor, connection):
                 )
                 connection.commit()
                 print(f"[UPDATE] Agregado evento {event_id} al registro existente ID {existing_registro['id']}")
+                
+                # Crear relación en expokossodo_registro_eventos
+                _create_registro_evento_relation(cursor, connection, existing_registro['id'], event_id)
             else:
                 print(f"[INFO] El evento {event_id} ya está en el registro ID {existing_registro['id']}")
         
@@ -96,7 +139,11 @@ def consolidate_lead_to_registros(lead_data, cursor, connection):
                 )
             )
             connection.commit()
-            print(f"[INSERT] Nuevo registro creado con ID {cursor.lastrowid} para {lead_data['email']}")
+            new_registro_id = cursor.lastrowid
+            print(f"[INSERT] Nuevo registro creado con ID {new_registro_id} para {lead_data['email']}")
+            
+            # Crear relación en expokossodo_registro_eventos
+            _create_registro_evento_relation(cursor, connection, new_registro_id, event_id)
         
         # 5. Marcar el lead como procesado y enviado
         cursor.execute(
