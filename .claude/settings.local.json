@@ -11,7 +11,9 @@
       "Bash(curl:*)",
       "Bash(python:*)",
       "Bash(timeout 30 python:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(python test:*)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []
